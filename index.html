@@ -14,9 +14,10 @@
         .card { background: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 25px; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; font-size: 14px; table-layout: fixed; }
-        th { background: var(--blue); color: white; padding: 10px; text-transform: uppercase; font-size: 11px; }
+        th { background: var(--blue); color: white; padding: 10px; text-transform: uppercase; font-size: 11px; overflow: hidden; }
         td { border: 1px solid #ddd; padding: 8px; text-align: center; overflow: hidden; text-overflow: ellipsis; transition: background 0.3s; }
         
+        /* Styl pro hotový zápas - PODBARVENÍ */
         tr.match-done td { background-color: #f2f2f2 !important; color: #888; }
         .match-done b { color: #555; }
         .match-done input { background: #eee; border-color: #ddd; color: #777; }
@@ -44,10 +45,17 @@
             header, .no-print, #syncStatus, #setupArea, .admin-lock { display: none !important; }
             .card { box-shadow: none; border: none; padding: 0; margin: 0; display: none !important; }
             body.print-results #tournamentArea, body.print-standings #standingsArea, body.print-cross #crossArea { display: block !important; width: 100% !important; }
+            
             td, th { border: 1.2pt solid #000 !important; color: #000 !important; font-size: 12px !important; }
             th { background: #eee !important; -webkit-print-color-adjust: exact; }
             tr.match-done td { background-color: white !important; color: black !important; }
-            body.blank-mode input[type=number], body.blank-mode .m-total, body.blank-mode .score-total, body.blank-mode .val-num, body.blank-mode .blank-hide { opacity: 0 !important; }
+
+            body.blank-mode input[type=number],
+            body.blank-mode .m-total, 
+            body.blank-mode .score-total, 
+            body.blank-mode .val-num,
+            body.blank-mode .blank-hide,
+            body.blank-mode #standingsBodyReal td:not(:nth-child(2)) { opacity: 0 !important; }
         }
     </style>
 </head>
@@ -121,17 +129,9 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    const firebaseConfig = { 
-        apiKey: "AIzaSyAs-TvůjKlíč", 
-        authDomain: "volejbalovy-manager-default.firebaseapp.com",
-        databaseURL: "https://volejbalovy-manager-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "volejbalovy-manager-default",
-        appId: "1:1056584284632:web:65e8483b878345688582d1"
-    };
-
+    const firebaseConfig = { databaseURL: "https://volejbalovy-manager-default-rtdb.europe-west1.firebasedatabase.app" };
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    // Nastaveno na turnaj_univerzalni podle tvého přání
     const dbRef = ref(db, 'turnaj_univerzalni');
 
     let teams = []; let role = "read"; let lastKnownData = null; let isEditing = false;
@@ -158,12 +158,6 @@
              const nextRow = allRows[allRows.indexOf(row) + 1];
              if(nextRow) nextRow.querySelectorAll('input')[Array.from(row.querySelectorAll('input')).indexOf(input)]?.focus();
         }
-        if (key === "ArrowUp") {
-             const row = input.closest('tr');
-             const allRows = Array.from(document.querySelectorAll('#matchBody tr:not(.slot-header)'));
-             const prevRow = allRows[allRows.indexOf(row) - 1];
-             if(prevRow) prevRow.querySelectorAll('input')[Array.from(row.querySelectorAll('input')).indexOf(input)]?.focus();
-        }
     };
 
     window.onFocusInput = function(el) { isEditing = true; if(el.value == "0") el.value = ""; el.select(); };
@@ -180,6 +174,11 @@
     window.saveResult = function(idx, field, val) {
         if(role === 'admin' || role === 'write') {
             update(dbRef, { [`results/${idx}/${field}`]: Number(val) });
+            // Okamžitá vizuální odezva podbarvení
+            const inputs = document.querySelectorAll(`input[oninput*="saveResult(${idx},"]`);
+            let sum = 0; inputs.forEach(i => sum += Number(i.value));
+            const row = inputs[0].closest('tr');
+            if(sum > 0) row.classList.add('match-done'); else row.classList.remove('match-done');
         }
     };
 
@@ -187,7 +186,7 @@
         const data = snap.val(); if(!data) return;
         const force = !lastKnownData || lastKnownData.matchList?.length !== data.matchList?.length;
         lastKnownData = data; 
-        processData(data, force);
+        processData(data, force); // Překreslujeme vždy pro zachování synchronizace barev
     });
 
     function processData(data, forceRedraw) {
@@ -195,6 +194,7 @@
         document.getElementById('syncStatus').innerText = "● LIVE: " + title;
         document.getElementById('crossTitle').innerText = title;
         teams = data.teams;
+        // Překreslit rozpis jen když se nepíše nebo když je to nutné
         if(forceRedraw || !isEditing) renderMatches(data.results || {}, data.matchList);
         calculateStandings(data.results || {}, data.matchList);
         renderCrossTable(data.results || {}, data.matchList);
@@ -257,7 +257,6 @@
                 if(i === j) row.innerHTML += `<td style="background:#ddd">X</td>`;
                 else {
                     const mIdx = matchList.findIndex(m => (m.t1 === i && m.t2 === j) || (m.t1 === j && m.t2 === i));
-                    if (mIdx === -1) { row.innerHTML += `<td>-</td>`; return; }
                     const r = results[mIdx] || { s1a:0, s1b:0, s2a:0, s2b:0 };
                     const hasVal = r && (Number(r.s1a)+Number(r.s1b)+Number(r.s2a)+Number(r.s2b) > 0);
                     const rev = matchList[mIdx].t1 !== i;
@@ -302,7 +301,7 @@
         setTimeout(() => { window.print(); }, 300);
     };
 
-    onValue(dbRef, (snap) => { if(!snap.exists()) { for(let i=0; i<6; i++) window.addTeamField(); } }, {onlyOnce: true});
+    for(let i=0; i<6; i++) window.addTeamField();
 </script>
 </body>
 </html>
