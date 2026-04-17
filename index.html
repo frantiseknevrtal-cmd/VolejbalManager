@@ -132,7 +132,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     // Původní cesta k databázi, kterou používáš na disku
-    const dbRef = ref(db, 'turnaj_univerzalni');
+    const dbRef = ref(db, 'turnaj_default');
 
     let teams = []; let role = "read"; let lastKnownData = null; let isEditing = false;
 
