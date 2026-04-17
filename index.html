@@ -28,6 +28,158 @@
 <body>
 
 <header>
+    <h1 id="mainTitle">Volejbal Manager PRO v.1.1</h1>
+    <div id="statusBtn" class="admin-lock no-print" onclick="window.login()">🔒 PŘIHLÁSIT</div>
+</header>
+
+<div class="container">
+    <div id="tournamentArea" class="card">
+        <h3>Harmonogram a výsledky</h3>
+        <table>
+            <thead><tr><th class="col-teams">Hřiště / Týmy</th><th style="width:18%">1. set</th><th style="width:18%">2. set</th><th style="width:10%">Míče</th><th style="width:10%">Sety</th></tr></thead>
+            <tbody id="matchBody"></tbody>
+        </table>
+    </div>
+
+    <div id="standingsArea" class="card">
+        <h3>Průběžná tabulka</h3>
+        <table>
+            <thead><tr><th style="width:5%">#</th><th style="text-align:left">Tým</th><th style="width:7%">Z</th><th style="width:12%">Sety</th><th style="width:15%">Míče</th><th style="width:12%">Podíl</th><th style="width:10%">Body</th></tr></thead>
+            <tbody id="standingsBodyReal"></tbody>
+        </table>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAs-TvůjKlíč", 
+        authDomain: "volejbalovy-manager-default.firebaseapp.com",
+        databaseURL: "https://volejbalovy-manager-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "volejbalovy-manager-default",
+        storageBucket: "volejbalovy-manager-default.appspot.com",
+        messagingSenderId: "1056584284632",
+        appId: "1:1056584284632:web:65e8483b878345688582d1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    // TADY JE TA OPRAVA: Míříme přesně na turnaj_default
+    const dbRef = ref(db, "turnaj_default"); 
+
+    let teams = []; let role = "read"; let lastKnownData = null;
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            const active = document.activeElement;
+            if (active.tagName === 'INPUT' && active.type === 'number') {
+                e.preventDefault();
+                const inputs = Array.from(document.querySelectorAll('#matchBody input[type=number]:not(:disabled)'));
+                const index = inputs.indexOf(active);
+                const colCount = 4;
+                let next = (e.key === 'ArrowUp') ? inputs[index - colCount] : inputs[index + colCount];
+                if (next) next.focus();
+            }
+        }
+    });
+
+    window.login = function() {
+        const p = prompt("Heslo pro zápis:");
+        if(p==="admin" || p==="write") { 
+            role="write"; 
+            document.getElementById('statusBtn').innerText="✍️ ZÁPIS AKTIVNÍ"; 
+            if(lastKnownData) renderMatches(lastKnownData.results || {}, lastKnownData.matchList);
+        }
+    };
+
+    window.saveResult = function(idx, f, v) {
+        if(role==='write') {
+            update(dbRef, { [`results/${idx}/${f}`]: Number(v) });
+        }
+    };
+
+    onValue(dbRef, (snap) => {
+        const d = snap.val();
+        if(!d) return;
+        lastKnownData = d;
+        teams = d.teams;
+        document.getElementById('mainTitle').innerText = d.title || "Volejbal Manager PRO v.1.1";
+        renderMatches(d.results || {}, d.matchList);
+        calculateStandings(d.results || {}, d.matchList);
+    });
+
+    function renderMatches(res, list) {
+        const b = document.getElementById('matchBody'); 
+        if (document.activeElement.tagName === 'INPUT') return;
+        b.innerHTML = ''; 
+        let lastS = 0;
+        if(!list) return;
+        list.forEach((m, i) => {
+            if(m.slot !== lastS) { lastS = m.slot; b.insertRow().innerHTML = `<td colspan="5" class="slot-header">SÉRIE ${lastS}</td>`; }
+            const r = res[i] || { s1a:0, s1b:0, s2a:0, s2b:0 };
+            const done = (Number(r.s1a)||0)+(Number(r.s1b)||0)+(Number(r.s2a)||0)+(Number(r.s2b)||0) > 0;
+            const row = b.insertRow(); if(done) row.classList.add('match-done');
+            const cw = (role==='write');
+            row.innerHTML = `<td class="col-teams"><small>Hř. ${m.court}</small><br><b>${teams[m.t1]}</b> vs <b>${teams[m.t2]}</b></td>
+                <td><input type="number" value="${r.s1a||0}" ${cw?'':'disabled'} oninput="window.saveResult(${i},'s1a',this.value)">:<input type="number" value="${r.s1b||0}" ${cw?'':'disabled'} oninput="window.saveResult(${i},'s1b',this.value)"></td>
+                <td><input type="number" value="${r.s2a||0}" ${cw?'':'disabled'} oninput="window.saveResult(${i},'s2a',this.value)">:<input type="number" value="${r.s2b||0}" ${cw?'':'disabled'} oninput="window.saveResult(${i},'s2b',this.value)"></td>
+                <td style="font-size:12px">${(Number(r.s1a)||0)+(Number(r.s2a)||0)}:${(Number(r.s1b)||0)+(Number(r.s2b)||0)}</td>
+                <td class="score-total">${((r.s1a>r.s1b?1:0)+(r.s2a>r.s2b?1:0))}:${((r.s1b>r.s1a?1:0)+(r.s2b>r.s2a?1:0))}</td>`;
+        });
+    }
+
+    function calculateStandings(res, list) {
+        if(!teams || !list) return;
+        let stats = teams.map(n => ({ name:n, p:0, sP:0, sM:0, mP:0, mM:0, pts:0 }));
+        list.forEach((m, i) => {
+            const r = res[i] || { s1a:0, s1b:0, s2a:0, s2b:0 };
+            const s1a=Number(r.s1a), s1b=Number(r.s1b), s2a=Number(r.s2a), s2b=Number(r.s2b);
+            if(s1a+s1b+s2a+s2b > 0) {
+                let sa=0, sb=0; if(s1a+s1b>0){ if(s1a>s1b) sa++; else if(s1b>s1a) sb++; } if(s2a+s2b>0){ if(s2a>s2b) sa++; else if(s2b>s2a) sb++; }
+                [m.t1, m.t2].forEach(t => stats[t].p++);
+                stats[m.t1].sP+=sa; stats[m.t1].sM+=sb; stats[m.t2].sP+=sb; stats[m.t2].sM+=sa;
+                stats[m.t1].mP+=(s1a+s2a); stats[m.t1].mM+=(s1b+s2b); stats[m.t2].mP+=(s1b+s2b); stats[m.t2].mM+=(s1a+s2a);
+                stats[m.t1].pts+=sa; stats[m.t2].pts+=sb;
+            }
+        });
+        stats.sort((a,b) => b.pts-a.pts || (b.sP/(b.sM||1))-(a.sP/(a.sM||1)));
+        const b = document.getElementById('standingsBodyReal'); b.innerHTML = '';
+        stats.forEach((s, i) => b.innerHTML += `<tr><td>${i+1}</td><td style="text-align:left"><b>${s.name}</b></td><td>${s.p}</td><td>${s.sP}:${s.sM}</td><td>${s.mP}:${s.mM}</td><td>${s.mM===0?0:(s.mP/s.mM).toFixed(3)}</td><td><b>${s.pts}</b></td></tr>`);
+    }
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volejbal Manager PRO v.1.1</title>
+    <style>
+        :root { --blue: #00529b; --yellow: #ffcc00; --bg: #f4f7f9; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); margin: 0; padding: 0; color: #333; }
+        header { background: var(--blue); color: white; padding: 20px; text-align: center; border-bottom: 5px solid var(--yellow); position: relative; }
+        header h1 { margin: 0; font-size: 22px; text-transform: uppercase; }
+        .admin-lock { position: absolute; right: 20px; top: 25px; cursor: pointer; background: rgba(255,255,255,0.1); padding: 5px 10px; border-radius: 5px; font-size: 12px; color: white; border: 1px solid rgba(255,255,255,0.3); }
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 15px; }
+        .card { background: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 25px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; font-size: 14px; table-layout: fixed; }
+        th { background: var(--blue); color: white; padding: 10px; text-transform: uppercase; font-size: 11px; }
+        td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        tr.match-done td { background-color: #f2f2f2 !important; color: #888; }
+        .col-teams { width: 30%; text-align: left; }
+        input[type=number] { width: 45px; height: 35px; text-align: center; font-weight: bold; border: 1px solid #ccc; border-radius: 4px; font-size: 18px; appearance: textfield; }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input:focus { border-color: var(--blue); outline: none; background: #fff9e6; }
+        .slot-header { background: #444; color: white; font-weight: bold; text-align: left; padding: 8px 15px; }
+        .score-total { font-size: 18px; font-weight: bold; color: var(--blue); }
+        @media print { .no-print, .admin-lock { display: none !important; } }
+    </style>
+</head>
+<body>
+
+<header>
     <h1>Volejbal Manager PRO v.1.1</h1>
     <div id="statusBtn" class="admin-lock no-print" onclick="window.login()">🔒 PŘIHLÁSIT</div>
 </header>
