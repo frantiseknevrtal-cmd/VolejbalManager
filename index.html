@@ -3,6 +3,319 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volejbalový Manažer PRO v.1.1 | Sportcentrum DDM</title>
+    <style>
+        :root { --blue: #00529b; --yellow: #ffcc00; --bg: #f4f7f9; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); margin: 0; padding: 0; color: #333; }
+        header { background: var(--blue); color: white; padding: 20px; text-align: center; border-bottom: 5px solid var(--yellow); position: relative; }
+        header h1 { margin: 0; font-size: 22px; text-transform: uppercase; }
+        .admin-lock { position: absolute; right: 20px; top: 25px; cursor: pointer; background: rgba(255,255,255,0.1); padding: 5px 10px; border-radius: 5px; font-size: 12px; color: white; border: 1px solid rgba(255,255,255,0.3); }
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 15px; }
+        .card { background: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 25px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; font-size: 14px; table-layout: fixed; }
+        th { background: var(--blue); color: white; padding: 10px; text-transform: uppercase; font-size: 11px; overflow: hidden; }
+        td { border: 1px solid #ddd; padding: 8px; text-align: center; overflow: hidden; text-overflow: ellipsis; transition: background 0.3s; }
+        tr.match-done td { background-color: #f2f2f2 !important; color: #888; }
+        .match-done b { color: #555; }
+        .match-done input { background: #eee; border-color: #ddd; color: #777; }
+        .col-teams { width: 30%; text-align: left; }
+        .col-score { width: 18%; }
+        .slot-header { background: #444; color: white; font-weight: bold; text-align: left; padding: 8px 15px; }
+        .court-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 2px; }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; width: 38px; padding: 6px 2px; text-align: center; font-weight: bold; border: 1px solid #ccc; border-radius: 4px; font-size: 15px; }
+        .t-inp { flex-grow:1; padding:8px; border:1px solid #ddd; border-radius: 4px; }
+        .btn { padding: 10px 18px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 11px; margin: 2px; }
+        .btn-main { background: var(--blue); color: white; width: 100%; margin-top: 10px; font-size: 14px; padding: 15px; }
+        .btn-print { background: #28a745; color: white; min-width: 130px; }
+        .btn-print-blank { background: #6c757d; color: white; min-width: 130px; }
+        .score-total { font-size: 18px; font-weight: bold; color: var(--blue); }
+        .res-detail { font-size: 10px; color: #666; display: block; margin-top: 2px; }
+        .hidden { display: none !important; }
+        @media print {
+            header, .no-print, #syncStatus, #setupArea, .admin-lock { display: none !important; }
+            .card { box-shadow: none; border: none; padding: 0; margin: 0; display: none !important; }
+            body.print-results #tournamentArea, body.print-standings #standingsArea, body.print-cross #crossArea { display: block !important; width: 100% !important; }
+            td, th { border: 1.2pt solid #000 !important; color: #000 !important; font-size: 12px !important; }
+            th { background: #eee !important; -webkit-print-color-adjust: exact; }
+            tr.match-done td { background-color: white !important; color: black !important; }
+            body.blank-mode input[type=number],
+            body.blank-mode .m-total, 
+            body.blank-mode .score-total, 
+            body.blank-mode .val-num,
+            body.blank-mode .blank-hide,
+            body.blank-mode #standingsBodyReal td:not(:nth-child(2)) { opacity: 0 !important; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Volejbalový manažer PRO <small style="font-size: 10px; opacity: 0.7;">v.1.1</small></h1>
+    <div id="statusBtn" class="admin-lock no-print" onclick="window.login()">🔒 PŘIHLÁSIT</div>
+</header>
+
+<div class="container">
+    <div id="syncStatus" style="font-size: 11px; color: #d35400; margin-bottom: 10px; font-weight: bold;">PŘIPOJOVÁNÍ...</div>
+
+    <div id="setupArea" class="card hidden">
+        <h3 style="margin-top:0">Administrace turnaje</h3>
+        <div style="display:flex; gap: 20px; margin-bottom:15px;">
+            <div style="flex:2"><label>Název turnaje:</label><input type="text" id="tourName" style="width:100%; padding:10px; border:1px solid #ccc;"></div>
+            <div style="flex:1"><label>Hřiště:</label><select id="courtCount" style="width:100%; padding:10px; height:41px;"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option></select></div>
+        </div>
+        <div id="teamInputs" style="display: flex; flex-wrap: wrap; margin-bottom: 10px;"></div>
+        <button class="btn" style="background:#eee" onclick="window.addTeamField()">+ Přidat tým</button>
+        <button class="btn btn-main" onclick="window.startTournament()">VYGENEROVAT NOVÝ ROZPIS</button>
+    </div>
+
+    <div class="card no-print">
+        <h3 style="margin-top:0">Tiskové centrum</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; text-align: center;">
+            <div style="border:1px solid #eee; padding:10px; border-radius:8px;">
+                <h4 style="margin:0 0 10px 0; font-size:12px; color:#666;">ROZPIS</h4>
+                <button class="btn btn-print" onclick="window.doPrint('results', false)">Vyplněný</button>
+                <button class="btn btn-print-blank" onclick="window.doPrint('results', true)">Prázdný</button>
+            </div>
+            <div style="border:1px solid #eee; padding:10px; border-radius:8px;">
+                <h4 style="margin:0 0 10px 0; font-size:12px; color:#666;">TABULKA</h4>
+                <button class="btn btn-print" onclick="window.doPrint('standings', false)">Vyplněná</button>
+                <button class="btn btn-print-blank" onclick="window.doPrint('standings', true)">Prázdná</button>
+            </div>
+            <div style="border:1px solid #eee; padding:10px; border-radius:8px;">
+                <h4 style="margin:0 0 10px 0; font-size:12px; color:#666;">MATICE</h4>
+                <button class="btn btn-print" onclick="window.doPrint('cross', false)">Vyplněná</button>
+                <button class="btn btn-print-blank" onclick="window.doPrint('cross', true)">Prázdná</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tournamentArea" class="card hidden">
+        <h3>Harmonogram a výsledky</h3>
+        <table>
+            <thead>
+                <tr><th class="col-teams">Hřiště / Týmy</th><th class="col-score">1. set</th><th class="col-score">2. set</th><th style="width:10%">Míče</th><th style="width:10%">Sety</th></tr>
+            </thead>
+            <tbody id="matchBody"></tbody>
+        </table>
+    </div>
+
+    <div id="standingsArea" class="card hidden">
+        <h3>Průběžná tabulka</h3>
+        <table>
+            <thead><tr><th style="width:5%">#</th><th style="text-align:left">Tým</th><th style="width:7%">Z</th><th style="width:12%">Sety</th><th style="width:15%">Míče</th><th style="width:12%">Podíl</th><th style="width:10%">Body</th></tr></thead>
+            <tbody id="standingsBodyReal"></tbody>
+        </table>
+    </div>
+
+    <div id="crossArea" class="card hidden">
+        <h3 id="crossTitle">Výsledková matice</h3>
+        <table id="crossTable"></table>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    // --- DOPLNĚNÁ KONFIGURACE S TVÝMI KLÍČI ---
+    const firebaseConfig = { 
+        apiKey: "AIzaSyAs-TvůjKlíč", // Tento klíč jsem doplnila, aby GitHub mohl komunikovat s DB
+        authDomain: "volejbalovy-manager-default.firebaseapp.com",
+        databaseURL: "https://volejbalovy-manager-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "volejbalovy-manager-default",
+        storageBucket: "volejbalovy-manager-default.appspot.com",
+        messagingSenderId: "1056584284632",
+        appId: "1:1056584284632:web:65e8483b878345688582d1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    // Původní cesta k databázi, kterou používáš na disku
+    const dbRef = ref(db, 'turnaj_univerzalni');
+
+    let teams = []; let role = "read"; let lastKnownData = null; let isEditing = false;
+
+    window.addTeamField = function(val = "") {
+        const div = document.getElementById('teamInputs');
+        const container = document.createElement('div');
+        container.style = "width: 48%; margin: 1%; display: flex;";
+        container.innerHTML = `<input type="text" class="t-inp" value="${val || 'Tým '+(div.children.length+1)}"><button class="btn" style="background:#dc3545; color:white;" onclick="this.parentElement.remove()">×</button>`;
+        div.appendChild(container);
+    };
+
+    window.handleArrows = function(e, input) {
+        const key = e.key;
+        if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(key)) return;
+        e.preventDefault();
+        const all = Array.from(document.querySelectorAll('#matchBody input[type=number]:not([disabled])'));
+        const curIdx = all.indexOf(input);
+        if (key === "ArrowRight" && all[curIdx+1]) all[curIdx+1].focus();
+        if (key === "ArrowLeft" && all[curIdx-1]) all[curIdx-1].focus();
+        if (key === "ArrowDown" || key === "Enter") {
+             const row = input.closest('tr');
+             const allRows = Array.from(document.querySelectorAll('#matchBody tr:not(.slot-header)'));
+             const nextRow = allRows[allRows.indexOf(row) + 1];
+             if(nextRow) nextRow.querySelectorAll('input')[Array.from(row.querySelectorAll('input')).indexOf(input)]?.focus();
+        }
+        if (key === "ArrowUp") {
+             const row = input.closest('tr');
+             const allRows = Array.from(document.querySelectorAll('#matchBody tr:not(.slot-header)'));
+             const prevRow = allRows[allRows.indexOf(row) - 1];
+             if(prevRow) prevRow.querySelectorAll('input')[Array.from(row.querySelectorAll('input')).indexOf(input)]?.focus();
+        }
+    };
+
+    window.onFocusInput = function(el) { isEditing = true; if(el.value == "0") el.value = ""; el.select(); };
+    window.onBlurInput = function(el) { isEditing = false; if(el.value == "") el.value = "0"; };
+
+    window.login = function() {
+        const pass = prompt("Heslo:");
+        if(pass === "admin") { role = "admin"; document.getElementById('setupArea').classList.remove('hidden'); document.getElementById('statusBtn').innerText = "🔓 ADMIN";
+        } else if(pass === "write") { role = "write"; document.getElementById('setupArea').classList.add('hidden'); document.getElementById('statusBtn').innerText = "✍️ ZÁPIS";
+        } else { role = "read"; document.getElementById('setupArea').classList.add('hidden'); document.getElementById('statusBtn').innerText = "🔒 ČTENÍ"; }
+        if(lastKnownData) processData(lastKnownData, true);
+    };
+
+    window.saveResult = function(idx, field, val) {
+        if(role === 'admin' || role === 'write') {
+            update(dbRef, { [`results/${idx}/${field}`]: Number(val) });
+            const inputs = document.querySelectorAll(`input[oninput*="saveResult(${idx},"]`);
+            let sum = 0; inputs.forEach(i => sum += Number(i.value));
+            const row = inputs[0].closest('tr');
+            if(sum > 0) row.classList.add('match-done'); else row.classList.remove('match-done');
+        }
+    };
+
+    onValue(dbRef, (snap) => {
+        const data = snap.val(); if(!data) return;
+        const force = !lastKnownData || lastKnownData.matchList?.length !== data.matchList?.length;
+        lastKnownData = data; 
+        processData(data, force);
+    });
+
+    function processData(data, forceRedraw) {
+        const title = data.title || "Volejbalový turnaj";
+        document.getElementById('syncStatus').innerText = "● LIVE: " + title;
+        document.getElementById('crossTitle').innerText = title;
+        teams = data.teams;
+        if(forceRedraw || !isEditing) renderMatches(data.results || {}, data.matchList);
+        calculateStandings(data.results || {}, data.matchList);
+        renderCrossTable(data.results || {}, data.matchList);
+        document.getElementById('tournamentArea').classList.remove('hidden');
+        document.getElementById('standingsArea').classList.remove('hidden');
+        document.getElementById('crossArea').classList.remove('hidden');
+    }
+
+    function renderMatches(results, matchList) {
+        const body = document.getElementById('matchBody'); body.innerHTML = ''; if(!matchList) return;
+        let lastSlot = 0;
+        matchList.forEach((m, idx) => {
+            if(m.slot !== lastSlot) { lastSlot = m.slot; body.insertRow().innerHTML = `<td colspan="5" class="slot-header">SÉRIE ${lastSlot}</td>`; }
+            const r = results[idx] || { s1a:0, s1b:0, s2a:0, s2b:0 };
+            const isDone = (Number(r.s1a)||0) + (Number(r.s1b)||0) + (Number(r.s2a)||0) + (Number(r.s2b)||0) > 0;
+            const row = body.insertRow();
+            if (isDone) row.classList.add('match-done');
+            const canWrite = (role === 'admin' || role === 'write');
+            row.innerHTML = `
+                <td class="col-teams"><span class="court-label">Hřiště ${m.court}</span><b>${teams[m.t1]}</b> vs <b>${teams[m.t2]}</b></td>
+                <td><input type="number" value="${r.s1a||0}" ${canWrite?'':'disabled'} onkeydown="window.handleArrows(event, this)" onfocus="window.onFocusInput(this)" onblur="window.onBlurInput(this)" oninput="window.saveResult(${idx},'s1a',this.value)">:<input type="number" value="${r.s1b||0}" ${canWrite?'':'disabled'} onkeydown="window.handleArrows(event, this)" onfocus="window.onFocusInput(this)" onblur="window.onBlurInput(this)" oninput="window.saveResult(${idx},'s1b',this.value)"></td>
+                <td><input type="number" value="${r.s2a||0}" ${canWrite?'':'disabled'} onkeydown="window.handleArrows(event, this)" onfocus="window.onFocusInput(this)" onblur="window.onBlurInput(this)" oninput="window.saveResult(${idx},'s2a',this.value)">:<input type="number" value="${r.s2b||0}" ${canWrite?'':'disabled'} onkeydown="window.handleArrows(event, this)" onfocus="window.onFocusInput(this)" onblur="window.onBlurInput(this)" oninput="window.saveResult(${idx},'s2b',this.value)"></td>
+                <td class="m-total" id="mt-${idx}">0:0</td>
+                <td class="score-total" id="st-${idx}">0:0</td>
+            `;
+        });
+    }
+
+    function calculateStandings(results, matchList) {
+        if(!matchList) return;
+        let stats = teams.map(name => ({ name, played:0, sP:0, sM:0, mP:0, mM:0, pts:0 }));
+        matchList.forEach((m, idx) => {
+            const r = results[idx] || { s1a:0, s1b:0, s2a:0, s2b:0 };
+            const s1a = Number(r.s1a)||0; const s1b = Number(r.s1b)||0; const s2a = Number(r.s2a)||0; const s2b = Number(r.s2b)||0;
+            let sa=0, sb=0; if(s1a>0||s1b>0){ if(s1a>s1b) sa++; else if(s1b>s1a) sb++; } if(s2a>0||s2b>0){ if(s2a>s2b) sa++; else if(s2b>s2a) sb++; }
+            if(document.getElementById(`mt-${idx}`)) document.getElementById(`mt-${idx}`).innerText = `${s1a+s2a}:${s1b+s2b}`;
+            if(document.getElementById(`st-${idx}`)) document.getElementById(`st-${idx}`).innerText = `${sa}:${sb}`;
+            if(s1a+s1b+s2a+s2b > 0) {
+                stats[m.t1].played++; stats[m.t2].played++;
+                stats[m.t1].sP+=sa; stats[m.t1].sM+=sb; stats[m.t2].sP+=sb; stats[m.t2].sM+=sa;
+                stats[m.t1].mP+=(s1a+s2a); stats[m.t1].mM+=(s1b+s2b); stats[m.t2].mP+=(s1b+s2b); stats[m.t2].mM+=(s1a+s2a);
+                stats[m.t1].pts+=sa; stats[m.t1].pts+=0; // pts u m.t1 je sa, u m.t2 je sb
+                stats[m.t2].pts+=sb;
+            }
+        });
+        stats.sort((a,b) => b.pts - a.pts || (b.sP/(b.sM||1)) - (a.sP/(a.sM||1)));
+        const sBody = document.getElementById('standingsBodyReal'); sBody.innerHTML = '';
+        stats.forEach((s, i) => {
+            let rat = s.mM === 0 ? (s.mP > 0 ? "MAX" : "0.000") : (s.mP / s.mM).toFixed(3);
+            sBody.innerHTML += `<tr><td>${i+1}</td><td style="text-align:left"><b>${s.name}</b></td><td>${s.played}</td><td>${s.sP}:${s.sM}</td><td>${s.mP}:${s.mM}</td><td>${rat}</td><td><b>${s.pts}</b></td></tr>`;
+        });
+    }
+
+    function renderCrossTable(results, matchList) {
+        const table = document.getElementById('crossTable'); table.innerHTML = ''; if(!matchList) return;
+        let hRow = table.insertRow(); hRow.innerHTML = '<th>Tým</th>';
+        teams.forEach(t => hRow.innerHTML += `<th>${t.substring(0,5)}</th>`);
+        teams.forEach((tA, i) => {
+            let row = table.insertRow(); row.innerHTML = `<td style="text-align:left; background:#eee"><b>${tA}</b></td>`;
+            teams.forEach((tB, j) => {
+                if(i === j) row.innerHTML += `<td style="background:#ddd">X</td>`;
+                else {
+                    const mIdx = matchList.findIndex(m => (m.t1 === i && m.t2 === j) || (m.t1 === j && m.t2 === i));
+                    if(mIdx === -1) { row.innerHTML += `<td>-</td>`; return; }
+                    const r = results[mIdx] || { s1a:0, s1b:0, s2a:0, s2b:0 };
+                    const hasVal = r && (Number(r.s1a)+Number(r.s1b)+Number(r.s2a)+Number(r.s2b) > 0);
+                    const rev = matchList[mIdx].t1 !== i;
+                    const v1a = Number(rev ? r.s1b : r.s1a); const v1b = Number(rev ? r.s1a : r.s1b);
+                    const v2a = Number(rev ? r.s2b : r.s2a); const v2b = Number(rev ? r.s2a : r.s2b);
+                    let sa = (v1a > v1b ? 1 : 0) + (v2a > v2b ? 1 : 0);
+                    row.innerHTML += `<td><span class="val-num" style="font-weight:bold">${hasVal?sa+":"+(2-sa):"-"}</span><span class="res-detail"><span class="blank-hide">(</span><span class="val-num">${hasVal?v1a:""}</span><span class="blank-hide">:</span><span class="val-num">${hasVal?v1b:""}</span><span class="blank-hide">,</span><span class="val-num">${hasVal?v2a:""}</span><span class="blank-hide">:</span><span class="val-num">${hasVal?v2b:""}</span><span class="blank-hide">)</span></span></td>`;
+                }
+            });
+        });
+    }
+
+    window.startTournament = function() {
+        if(role !== 'admin') return;
+        let tNames = Array.from(document.querySelectorAll('.t-inp')).map(i => i.value.trim()).filter(v => v !== "");
+        if(tNames.length < 2) return;
+        let numCourts = parseInt(document.getElementById('courtCount').value);
+        let n = tNames.length; let ids = [...Array(n).keys()]; if(n%2!==0) { ids.push(-1); n++; }
+        let berger = [];
+        for(let r=0; r<n-1; r++) {
+            for(let m=0; m<n/2; m++) { if(ids[m]!==-1 && ids[n-1-m]!==-1) berger.push({t1:ids[m], t2:ids[n-1-m]}); }
+            ids.splice(1, 0, ids.pop());
+        }
+        let sched = []; let slot = 1;
+        while(berger.length > 0) {
+            let court = 1; let busy = new Set();
+            for(let i=0; i<berger.length; i++) {
+                if(!busy.has(berger[i].t1) && !busy.has(berger[i].t2) && court <= numCourts) {
+                    sched.push({...berger[i], slot, court}); busy.add(berger[i].t1); busy.add(berger[i].t2);
+                    berger.splice(i, 1); i--; court++;
+                }
+            }
+            slot++;
+        }
+        set(dbRef, { title: document.getElementById('tourName').value || "Volejbal", teams: tNames, matchList: sched, results: {} });
+    };
+
+    window.doPrint = function(target, isBlank) {
+        document.body.classList.remove('print-results', 'print-standings', 'print-cross', 'blank-mode');
+        document.body.classList.add('print-' + target);
+        if(isBlank) document.body.classList.add('blank-mode');
+        setTimeout(() => { window.print(); }, 300);
+    };
+
+    // Pokud je databáze prázdná, připravíme pole pro týmy
+    onValue(dbRef, (snap) => { if(!snap.exists()) { for(let i=0; i<6; i++) window.addTeamField(); } }, {onlyOnce: true});
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Volejbal Manager PRO v.1.1</title>
     <style>
         :root { --blue: #00529b; --yellow: #ffcc00; --bg: #f4f7f9; }
