@@ -127,7 +127,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.app";
+    import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     const firebaseConfig = { databaseURL: "https://volejbalovy-manager-default-rtdb.europe-west1.firebasedatabase.app" };
     const app = initializeApp(firebaseConfig);
@@ -174,6 +174,7 @@
     window.saveResult = function(idx, field, val) {
         if(role === 'admin' || role === 'write') {
             update(dbRef, { [`results/${idx}/${field}`]: Number(val) });
+            // Okamžitá vizuální odezva podbarvení
             const inputs = document.querySelectorAll(`input[oninput*="saveResult(${idx},"]`);
             let sum = 0; inputs.forEach(i => sum += Number(i.value));
             const row = inputs[0].closest('tr');
@@ -185,7 +186,7 @@
         const data = snap.val(); if(!data) return;
         const force = !lastKnownData || lastKnownData.matchList?.length !== data.matchList?.length;
         lastKnownData = data; 
-        processData(data, force);
+        processData(data, force); // Překreslujeme vždy pro zachování synchronizace barev
     });
 
     function processData(data, forceRedraw) {
@@ -193,6 +194,7 @@
         document.getElementById('syncStatus').innerText = "● LIVE: " + title;
         document.getElementById('crossTitle').innerText = title;
         teams = data.teams;
+        // Překreslit rozpis jen když se nepíše nebo když je to nutné
         if(forceRedraw || !isEditing) renderMatches(data.results || {}, data.matchList);
         calculateStandings(data.results || {}, data.matchList);
         renderCrossTable(data.results || {}, data.matchList);
@@ -223,7 +225,7 @@
 
     function calculateStandings(results, matchList) {
         if(!matchList) return;
-        let stats = teams.map(name => ({ name, played:0, sP:0, sM:0, mP:0, mM:0, pts:0, ratio:0 }));
+        let stats = teams.map(name => ({ name, played:0, sP:0, sM:0, mP:0, mM:0, pts:0 }));
         matchList.forEach((m, idx) => {
             const r = results[idx] || { s1a:0, s1b:0, s2a:0, s2b:0 };
             const s1a = Number(r.s1a)||0; const s1b = Number(r.s1b)||0; const s2a = Number(r.s2a)||0; const s2b = Number(r.s2b)||0;
@@ -237,19 +239,11 @@
                 stats[m.t1].pts+=sa; stats[m.t2].pts+=sb;
             }
         });
-        
-        // Výpočet podílu pro řazení
-        stats.forEach(s => {
-            s.ratio = s.mM === 0 ? (s.mP > 0 ? 999 : 0) : (s.mP / s.mM);
-        });
-
-        // Řazení: 1. Body, 2. Podíl míčů
-        stats.sort((a,b) => b.pts - a.pts || b.ratio - a.ratio);
-
+        stats.sort((a,b) => b.pts - a.pts || (b.sP/(b.sM||1)) - (a.sP/(a.sM||1)));
         const sBody = document.getElementById('standingsBodyReal'); sBody.innerHTML = '';
         stats.forEach((s, i) => {
-            let ratStr = s.mM === 0 ? (s.mP > 0 ? "MAX" : "0.000") : (s.mP / s.mM).toFixed(3);
-            sBody.innerHTML += `<tr><td>${i+1}</td><td style="text-align:left"><b>${s.name}</b></td><td>${s.played}</td><td>${s.sP}:${s.sM}</td><td>${s.mP}:${s.mM}</td><td>${ratStr}</td><td><b>${s.pts}</b></td></tr>`;
+            let rat = s.mM === 0 ? (s.mP > 0 ? "MAX" : "0.000") : (s.mP / s.mM).toFixed(3);
+            sBody.innerHTML += `<tr><td>${i+1}</td><td style="text-align:left"><b>${s.name}</b></td><td>${s.played}</td><td>${s.sP}:${s.sM}</td><td>${s.mP}:${s.mM}</td><td>${rat}</td><td><b>${s.pts}</b></td></tr>`;
         });
     }
 
